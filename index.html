@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="th" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบลงทะเบียนขอวันหยุด (Leave Request System)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Font Prompt for Thai -->
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Prompt', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Prompt', sans-serif; }
+        .transition-all-custom { transition: all 0.3s ease; }
+        @media print {
+            body * { visibility: hidden; }
+            #printArea, #printArea * { visibility: visible; }
+            #printArea { position: absolute; left: 0; top: 0; width: 100%; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 h-full flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-indigo-600 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-white/10 p-2.5 rounded-xl backdrop-blur-sm">
+                    <i class="fa-solid fa-calendar-days text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold">ระบบลงทะเบียนขอวันหยุด</h1>
+                    <p class="text-xs text-indigo-200">Secure Leave Request & Management System</p>
+                </div>
+            </div>
+            <div class="flex items-center flex-wrap gap-2.5">
+                <button onclick="openReportModal()" class="bg-indigo-700 hover:bg-indigo-800 text-indigo-100 font-medium px-3.5 py-2 rounded-xl text-xs transition flex items-center gap-2">
+                    <i class="fa-solid fa-file-arrow-down"></i> พิมพ์รายงาน
+                </button>
+                <button onclick="openCancelModal()" class="bg-rose-600 hover:bg-rose-700 text-white font-medium px-3.5 py-2 rounded-xl text-xs transition flex items-center gap-2 shadow-sm">
+                    <i class="fa-solid fa-ban"></i> ยกเลิกขอวันลาหยุด
+                </button>
+                <button onclick="openLeaveModal()" class="bg-white text-indigo-600 hover:bg-indigo-50 font-semibold px-4 py-2 rounded-xl shadow transition flex items-center gap-2 text-sm">
+                    <i class="fa-solid fa-plus-circle"></i> ยื่นคำขอลาหยุด
+                </button>
+                <button onclick="resetData()" class="bg-indigo-700 hover:bg-indigo-800 text-indigo-100 px-3 py-2 rounded-xl text-xs transition" title="คืนค่าข้อมูลตัวอย่าง">
+                    <i class="fa-solid fa-rotate-right"></i> รีเซ็ต
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Left Column: Calendar & Daily Summary -->
+        <div class="lg:col-span-2 space-y-6">
+            
+            <!-- Calendar Widget Card -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 id="calendarMonthYear" class="text-lg font-bold text-slate-700"></h2>
+                    <div class="flex items-center gap-1">
+                        <button onclick="changeMonth(-1)" class="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition"><i class="fa-solid fa-chevron-left"></i></button>
+                        <button onclick="goToCurrentMonth()" class="px-3 py-1 text-xs bg-indigo-50 text-indigo-600 rounded-lg font-medium hover:bg-indigo-100 transition">ธันวาคม 2569</button>
+                        <button onclick="changeMonth(1)" class="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition"><i class="fa-solid fa-chevron-right"></i></button>
+                    </div>
+                </div>
+
+                <!-- Days Header -->
+                <div class="grid grid-cols-7 text-center text-xs font-semibold text-slate-400 mb-2">
+                    <div>อา</div><div>จ</div><div>อ</div><div>พ</div><div>พฤ</div><div>ศ</div><div>ส</div>
+                </div>
+
+                <!-- Days Grid -->
+                <div id="calendarDays" class="grid grid-cols-7 gap-1"></div>
+
+                <div class="mt-4 flex items-center justify-between text-xs text-slate-500 border-t pt-3 flex-wrap gap-2">
+                    <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-rose-400 inline-block"></span> วันหยุดนักขัตฤกษ์</span>
+                    <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-indigo-600 inline-block"></span> วันที่เลือก</span>
+                </div>
+            </div>
+
+            <!-- Daily Summary Detail Card -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 id="selectedDateTitle" class="font-bold text-slate-700 text-base">สรุปคำขอหยุดประจำวัน</h3>
+                    <span id="dailyCountBadge" class="bg-indigo-100 text-indigo-700 text-xs px-2.5 py-1 rounded-full font-semibold">0 คนหยุดวันนี้</span>
+                </div>
+                <div id="dailyLeaveList" class="space-y-2 max-h-60 overflow-y-auto pr-1"></div>
+            </div>
+
+        </div>
+
+        <!-- Right Column: Guidelines -->
+        <div class="space-y-6">
+            
+            <!-- กล่องแสดงหลักเกณฑ์การเขียนขอหยุด/ลาพักผ่อน -->
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <div class="flex items-center space-x-2 mb-4">
+                    <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <h3 class="text-lg font-semibold text-gray-800">หลักเกณฑ์การเขียนขอหยุด ,ขอลาพักผ่อน</h3>
+                </div>
+                <div class="space-y-2 text-gray-600 text-sm leading-relaxed bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <p><strong>1.</strong> <span class="text-rose-600 font-medium">ไม่อนุญาตให้ขอหยุดในวันหยุดนักขัตฤกษ์</span> (ระบบจะบล็อกอัตโนมัติ)</p>
+                    <p><strong>2.</strong> เปิดให้เริ่มยื่นขอหยุดได้ตั้งแต่วันที่ <span class="text-indigo-600 font-medium">1 ธันวาคม 2569</span> เป็นต้นไป</p>
+                    <p><strong>3.</strong> ไม่ควรขอหยุดวันเสาร์-อาทิตย์ทุกสัปดาห์ใน 1 เดือน (ขอได้ไม่เกิน 1 ครั้ง/เดือน/คน)</p>
+                    <p><strong>4.</strong> การขอหยุดไม่ควรซ้ำกันเกิน 2 คน (ให้สิทธิ์คนที่ขอลำดับที่ 1 และ 2 ก่อน)</p>
+                    <p><strong>5.</strong> ขอหยุดได้ไม่เกิน 2 ครั้ง/เดือน/คน</p>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Leave Request Modal -->
+    <div id="leaveModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div class="bg-indigo-600 px-6 py-4 text-white flex justify-between items-center">
+                <h3 class="font-bold text-base flex items-center gap-2"><i class="fa-solid fa-calendar-plus"></i> ยื่นคำขอลาหยุด</h3>
+                <button onclick="closeLeaveModal()" class="text-indigo-200 hover:text-white transition"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form id="leaveForm" onsubmit="handleLeaveSubmit(event)" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">ชื่อ-นามสกุล *</label>
+                    <input type="text" id="employeeName" required placeholder="เช่น สมชาย ใจดี" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">ตำแหน่ง *</label>
+                        <select id="employeeDept" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="พยาบาล">พยาบาล</option>
+                            <option value="ผู้ช่วยเหลือคนไข้">ผู้ช่วยเหลือคนไข้</option>
+                            <option value="แม่บ้าน">แม่บ้าน</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">ประเภทการลา *</label>
+                        <select id="leaveType" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="ลาพักร้อน">ลาพักร้อน</option>
+                            <option value="เวร OFF">เวร OFF</option>
+                            <option value="อบรม/ประชุม">อบรม/ประชุม</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">ตั้งแต่วันที่ * (เริ่ม 1 ธ.ค. 69)</label>
+                        <input type="date" id="startDate" required min="2026-12-01" onchange="validateDates('startDate', 'endDate')" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">ถึงวันที่ *</label>
+                        <input type="date" id="endDate" required min="2026-12-01" onchange="validateDates('startDate', 'endDate')" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">เหตุผลการลา</label>
+                    <textarea id="leaveReason" rows="2" placeholder="ระบุเหตุผลย่อๆ เช่น ไปต่างจังหวัด, ทำธุระส่วนตัว" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                </div>
+                <div class="pt-2 flex gap-3">
+                    <button type="button" onclick="closeLeaveModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium py-2.5 rounded-xl text-sm transition">ยกเลิก</button>
+                    <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-xl text-sm shadow transition">ยืนยันการขอหยุด</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Cancel Leave Modal -->
+    <div id="cancelModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div class="bg-rose-600 px-6 py-4 text-white flex justify-between items-center">
+                <h3 class="font-bold text-base flex items-center gap-2"><i class="fa-solid fa-ban"></i> ยกเลิกขอวันลาหยุด</h3>
+                <button onclick="closeCancelModal()" class="text-rose-200 hover:text-white transition"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form id="cancelForm" onsubmit="handleCancelSubmit(event)" class="p-6 space-y-4">
+                <p class="text-xs text-slate-500">ระบุชื่อและช่วงวันที่ต้องการยกเลิกคำขอ</p>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">ชื่อ-นามสกุล (ผู้ขอลา) *</label>
+                    <input type="text" id="cancelName" required placeholder="เช่น สมชาย ใจดี" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">จากวันที่ *</label>
+                        <input type="date" id="cancelStartDate" required min="2026-12-01" onchange="validateDates('cancelStartDate', 'cancelEndDate')" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">ถึงวันที่ *</label>
+                        <input type="date" id="cancelEndDate" required min="2026-12-01" onchange="validateDates('cancelStartDate', 'cancelEndDate')" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
+                    </div>
+                </div>
+                <div class="pt-2 flex gap-3">
+                    <button type="button" onclick="closeCancelModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium py-2.5 rounded-xl text-sm transition">ปิด</button>
+                    <button type="submit" class="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-medium py-2.5 rounded-xl text-sm shadow transition">ยืนยันการยกเลิก</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Monthly Report Modal -->
+    <div id="reportModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-4xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="bg-indigo-600 px-6 py-4 text-white flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-base flex items-center gap-2"><i class="fa-solid fa-file-lines"></i> รายงานสรุปคำขอหยุดประจำเดือน</h3>
+                <button onclick="closeReportModal()" class="text-indigo-200 hover:text-white transition"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1 space-y-4" id="printArea">
+                <div class="flex justify-between items-center border-b pb-3">
+                    <div>
+                        <h4 id="reportTitle" class="text-base font-bold text-slate-700"></h4>
+                        <p class="text-xs text-slate-400">โรงพยาบาลพระนารายณ์มหาราช | ระบบจัดการวันหยุด</p>
+                    </div>
+                    <div class="text-right text-xs text-slate-500">
+                        พิมพ์เมื่อ: <span id="printDate"></span>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-600 border-b">
+                                <th class="p-2.5 rounded-l-lg">ลำดับ</th>
+                                <th class="p-2.5">ชื่อ-นามสกุล</th>
+                                <th class="p-2.5">ตำแหน่ง</th>
+                                <th class="p-2.5">ประเภท</th>
+                                <th class="p-2.5">ช่วงวันที่ลา</th>
+                                <th class="p-2.5">สถานะ</th>
+                                <th class="p-2.5 rounded-r-lg">เหตุผล</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reportTableBody" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="bg-slate-50 px-6 py-3 border-t flex justify-end gap-3 shrink-0">
+                <button onclick="closeReportModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-medium transition">ปิดหน้าต่าง</button>
+                <button onclick="window.print()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-medium transition flex items-center gap-2">
+                    <i class="fa-solid fa-print"></i> พิมพ์ / บันทึก PDF
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 text-sm">
+        <i id="toastIcon" class="fa-solid fa-check-circle text-emerald-400"></i>
+        <span id="toastMessage">ดำเนินการสำเร็จ</span>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        let leaveRequests = [];
+        let currentDate = new Date(2026, 11, 1); // เริ่มต้นที่ ธันวาคม 2569
+        let selectedDateStr = "2026-12-01";
+
+        const TH_MONTHS = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+
+        const publicHolidays = [
+            "2026-12-05", "2026-12-10", "2026-12-31",
+            "2027-01-01", "2027-02-12", "2027-03-15", "2027-04-06",
+            "2027-04-13", "2027-04-14", "2027-04-15", "2027-05-01",
+            "2027-05-04", "2027-05-20", "2027-06-03", "2027-07-18",
+            "2027-07-19", "2027-07-28", "2027-08-12", "2027-10-13",
+            "2027-10-23", "2027-12-05", "2027-12-10", "2027-12-31"
+        ];
+
+        const defaultMockData = [];
+
+        function isHoliday(dateStr) {
+            return publicHolidays.includes(dateStr);
+        }
+
+        function formatDateKey(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            
+            document.getElementById('startDate').value = "2026-12-01";
+            document.getElementById('endDate').value = "2026-12-01";
+            document.getElementById('cancelStartDate').value = "2026-12-01";
+            document.getElementById('cancelEndDate').value = "2026-12-01";
+            
+            renderAll();
+        });
+
+        function loadData() {
+            const saved = localStorage.getItem('leave_requests_db_v3');
+            if (saved) {
+                try {
+                    leaveRequests = JSON.parse(saved);
+                } catch (e) {
+                    leaveRequests = [];
+                }
+            } else {
+                leaveRequests = defaultMockData;
+                saveData();
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem('leave_requests_db_v3', JSON.stringify(leaveRequests));
+        }
+
+        function resetData() {
+            if (confirm("คุณต้องการล้างข้อมูลคำขอทั้งหมดใช่หรือไม่?")) {
+                leaveRequests = defaultMockData;
+                saveData();
+                renderAll();
+                showToast("รีเซ็ตข้อมูลเรียบร้อยแล้ว", "success");
+            }
+        }
+
+        function renderAll() {
+            renderCalendar();
+            renderQueue();
+            renderDailySummary();
+        }
+
+        function validateDates(startId, endId) {
+            const startVal = document.getElementById(startId).value;
+            const endVal = document.getElementById(endId).value;
+            if (startVal && endVal && startVal > endVal) {
+                document.getElementById(endId).value = startVal;
+            }
+        }
+
+        function renderCalendar() {
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+
+            document.getElementById('calendarMonthYear').innerText = `${TH_MONTHS[month]} ${year + 543}`;
+
+            const firstDayIndex = new Date(year, month, 1).getDay();
+            const totalDays = new Date(year, month + 1, 0).getDate();
+            const prevTotalDays = new Date(year, month, 0).getDate();
+
+            const container = document.getElementById('calendarDays');
+            container.innerHTML = '';
+
+            for (let i = firstDayIndex - 1; i >= 0; i--) {
+                const dayNum = prevTotalDays - i;
+                container.appendChild(createDayCell(dayNum, true, null));
+            }
+
+            for (let i = 1; i <= totalDays; i++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                container.appendChild(createDayCell(i, false, dateStr));
+            }
+
+            const totalCellsSoFar = firstDayIndex + totalDays;
+            const remainingCells = totalCellsSoFar <= 35 ? (35 - totalCellsSoFar) : (42 - totalCellsSoFar);
+            for (let i = 1; i <= remainingCells; i++) {
+                container.appendChild(createDayCell(i, true, null));
+            }
+        }
+
+        function createDayCell(dayNum, isOtherMonth, dateStr) {
+            const div = document.createElement('div');
+            div.className = `aspect-square p-1 flex flex-col justify-between rounded-xl text-xs relative select-none transition-all-custom ${
+                isOtherMonth ? 'text-slate-300 bg-slate-50/50' : 'text-slate-700 bg-white border border-slate-100 hover:border-indigo-200 cursor-pointer'
+            }`;
+
+            if (!isOtherMonth) {
+                div.onclick = () => {
+                    selectedDateStr = dateStr;
+                    renderCalendar();
+                    renderDailySummary();
+                };
+
+                const isSelected = (dateStr === selectedDateStr);
+                const holiday = isHoliday(dateStr);
+
+                if (isSelected) {
+                    div.classList.add('ring-2', 'ring-indigo-600', 'bg-indigo-50/30');
+                }
+
+                if (holiday) {
+                    div.classList.add('bg-rose-50/60', 'border-rose-200');
+                }
+
+                const leavesOnThisDay = leaveRequests.filter(req => req.status !== 'REJECTED' && dateStr >= req.startDate && dateStr <= req.endDate);
+
+                div.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <span class="font-medium ${holiday ? 'bg-rose-500 text-white w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px]' : ''}">${dayNum}</span>
+                        ${leavesOnThisDay.length > 0 ? `<span class="bg-indigo-100 text-indigo-700 text-[10px] px-1 rounded font-semibold">${leavesOnThisDay.length}</span>` : ''}
+                    </div>
+                    <div class="space-y-0.5 overflow-hidden">
+                        ${holiday ? `<div class="truncate text-[9px] px-1 py-0.5 rounded bg-rose-100 text-rose-800 font-medium">วันหยุดนักขัตฤกษ์</div>` : ''}
+                        ${leavesOnThisDay.slice(0, 1).map(l => `
+                            <div class="truncate text-[9px] px-1 py-0.5 rounded ${l.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                                ${l.name.split(' ')[0]}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else {
+                div.innerHTML = `<span class="opacity-40">${dayNum}</span>`;
+            }
+
+            return div;
+        }
+
+        function changeMonth(direction) {
+            currentDate.setMonth(currentDate.getMonth() + direction);
+            renderCalendar();
+        }
+
+        function goToCurrentMonth() {
+            currentDate = new Date(2026, 11, 1);
+            renderCalendar();
+        }
+
+        function renderDailySummary() {
+            const titleEl = document.getElementById('selectedDateTitle');
+            const badgeEl = document.getElementById('dailyCountBadge');
+            const listEl = document.getElementById('dailyLeaveList');
+
+            const [y, m, d] = selectedDateStr.split('-');
+            const thaiDateStr = `${parseInt(d)} ${TH_MONTHS[parseInt(m) - 1]} ${parseInt(y) + 543}`;
+            
+            let holidayText = isHoliday(selectedDateStr) ? ` <span class="text-rose-600 text-xs font-semibold">(วันหยุดนักขัตฤกษ์ - ไม่อนุญาตให้ขอหยุด)</span>` : '';
+            titleEl.innerHTML = `สรุปวันที่ ${thaiDateStr}${holidayText}`;
+
+            const activeLeaves = leaveRequests.filter(req => req.status !== 'REJECTED' && selectedDateStr >= req.startDate && selectedDateStr <= req.endDate);
+            badgeEl.innerText = `${activeLeaves.length} คนหยุดวันนี้`;
+
+            if (activeLeaves.length === 0) {
+                listEl.innerHTML = `
+                    <div class="text-center py-8 text-slate-400 text-xs">
+                        <i class="fa-solid fa-mug-hot text-2xl mb-2 block opacity-40"></i>
+                        ไม่มีพนักงานลาหยุดในวันนี้ ทุกคนพร้อมทำงานปกติ!
+                    </div>
+                `;
+                return;
+            }
+
+            listEl.innerHTML = activeLeaves.map(req => `
+                <div class="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-sm">
+                            ${req.name.charAt(0)}
+                        </div>
+                        <div>
+                            <p class="font-semibold text-slate-700 text-sm">${req.name}</p>
+                            <p class="text-slate-400 text-[11px]">${req.dept} <span class="text-indigo-600 font-medium">${req.type}</span> (${req.startDate} ถึง ${req.endDate})</p>
+                        </div>
+                    </div>
+                    <span class="px-2 py-1 rounded-full text-[10px] font-semibold ${req.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
+                        ${req.status === 'APPROVED' ? 'อนุมัติแล้ว' : 'รออนุมัติ'}
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        function renderQueue() {
+            // ฟังก์ชันรองรับกรณีเรียกใช้งาน แต่ถอนองค์ประกอบ UI ออกแล้ว
+        }
+
+        function handleLeaveSubmit(e) {
+            e.preventDefault();
+            const name = document.getElementById('employeeName').value.trim();
+            const dept = document.getElementById('employeeDept').value;
+            const type = document.getElementById('leaveType').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            const reason = document.getElementById('leaveReason').value.trim();
+
+            let curr = new Date(startDate);
+            let last = new Date(endDate);
+            let holidayFound = null;
+
+            while (curr <= last) {
+                let dateStr = formatDateKey(curr);
+                if (isHoliday(dateStr)) {
+                    holidayFound = dateStr;
+                    break;
+                }
+                curr.setDate(curr.getDate() + 1);
+            }
+
+            if (holidayFound) {
+                showToast(`ไม่สามารถขอหยุดได้ เนื่องจากวันที่ ${holidayFound} ตรงกับวันหยุดนักขัตฤกษ์`, "error");
+                return;
+            }
+
+            const newReq = {
+                id: 'req_' + Date.now(),
+                name,
+                dept,
+                type,
+                startDate,
+                endDate,
+                reason,
+                status: 'PENDING',
+                timestamp: Date.now()
+            };
+
+            leaveRequests.push(newReq);
+            saveData();
+            renderAll();
+            closeLeaveModal();
+            document.getElementById('leaveForm').reset();
+            document.getElementById('startDate').value = "2026-12-01";
+            document.getElementById('endDate').value = "2026-12-01";
+            showToast("ยื่นคำขอลาหยุดสำเร็จ", "success");
+        }
+
+        function handleCancelSubmit(e) {
+            e.preventDefault();
+            const name = document.getElementById('cancelName').value.trim();
+            const startDate = document.getElementById('cancelStartDate').value;
+            const endDate = document.getElementById('cancelEndDate').value;
+
+            const index = leaveRequests.findIndex(r => r.name === name && r.startDate === startDate && r.endDate === endDate);
+            if (index !== -1) {
+                leaveRequests.splice(index, 1);
+                saveData();
+                renderAll();
+                closeCancelModal();
+                document.getElementById('cancelForm').reset();
+                showToast("ยกเลิกคำขอลาหยุดเรียบร้อยแล้ว", "success");
+            } else {
+                showToast("ไม่พบรายการคำขอที่ตรงกับข้อมูลดังกล่าว", "error");
+            }
+        }
+
+        function deleteRequest(id) {
+            if (confirm("คุณต้องการลบรายการนี้ใช่หรือไม่?")) {
+                leaveRequests = leaveRequests.filter(r => r.id !== id);
+                saveData();
+                renderAll();
+                showToast("ลบรายการสำเร็จ", "success");
+            }
+        }
+
+        function openLeaveModal() {
+            document.getElementById('leaveModal').classList.remove('hidden');
+        }
+
+        function closeLeaveModal() {
+            document.getElementById('leaveModal').classList.add('hidden');
+        }
+
+        function openCancelModal() {
+            document.getElementById('cancelModal').classList.remove('hidden');
+        }
+
+        function closeCancelModal() {
+            document.getElementById('cancelModal').classList.add('hidden');
+        }
+
+        function openReportModal() {
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+            document.getElementById('reportTitle').innerText = `รายงานสรุปคำขอลาหยุดประจำเดือน ${TH_MONTHS[month]} ${year + 543}`;
+            document.getElementById('printDate').innerText = new Date().toLocaleDateString('th-TH');
+
+            const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
+            const monthRequests = leaveRequests.filter(r => r.startDate.startsWith(monthStr) || r.endDate.startsWith(monthStr));
+
+            const tbody = document.getElementById('reportTableBody');
+            if (monthRequests.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-400">ไม่มีข้อมูลคำขอในเดือนนี้</td></tr>`;
+            } else {
+                tbody.innerHTML = monthRequests.map((r, i) => `
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-2.5">${i + 1}</td>
+                        <td class="p-2.5 font-medium">${r.name}</td>
+                        <td class="p-2.5">${r.dept}</td>
+                        <td class="p-2.5">${r.type}</td>
+                        <td class="p-2.5">${r.startDate} ถึง ${r.endDate}</td>
+                        <td class="p-2.5">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${r.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' : r.status === 'REJECTED' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}">
+                                ${r.status === 'APPROVED' ? 'อนุมัติแล้ว' : r.status === 'REJECTED' ? 'ไม่อนุมัติ' : 'รออนุมัติ'}
+                            </span>
+                        </td>
+                        <td class="p-2.5">${r.reason || '-'}</td>
+                    </tr>
+                `).join('');
+            }
+
+            document.getElementById('reportModal').classList.remove('hidden');
+        }
+
+        function closeReportModal() {
+            document.getElementById('reportModal').classList.add('hidden');
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastMessage.innerText = message;
+            if (type === 'success') {
+                toastIcon.className = 'fa-solid fa-check-circle text-emerald-400';
+            } else {
+                toastIcon.className = 'fa-solid fa-triangle-exclamation text-rose-400';
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
