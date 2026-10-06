@@ -303,38 +303,41 @@
 
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwDqc_RNlQx_WtUqOb2hzD_uxnHSXePvbQJoO5rstVHRo3cwDA6-eScZK5fDkf9Jffw/exec";
 
-        async function loadData() {
-            try {
-                const response = await fetch(WEB_APP_URL);
-                const data = await response.json();
-                if (Array.isArray(data) && data.length > 0) {
-                    leaveRequests = data;
-                } else {
-                    leaveRequests = defaultMockData;
-                }
-                renderAll();
-            } catch (e) {
-                console.error("โหลดข้อมูลจาก Google Sheets ไม่สำเร็จ กำลังใช้ข้อมูลสำรอง", e);
-                const saved = localStorage.getItem('leave_requests_db_secure');
-                leaveRequests = saved ? JSON.parse(saved) : defaultMockData;
-                renderAll();
-            }
+       async function loadData() {
+    try {
+        const response = await fetch(WEB_APP_URL);
+        const data = await response.json();
+        
+        // ถ้าใน Google Sheets มีข้อมูล ให้ดึงมาแสดงผลทันที
+        if (Array.isArray(data)) {
+            leaveRequests = data;
+            // อัปเดตเก็บไว้ในเครื่องตัวเองเพื่อดูแบบออฟไลน์ได้ชั่วคราว
+            localStorage.setItem('leave_requests_db_secure', JSON.stringify(leaveRequests));
+            renderAll();
         }
+    } catch (e) {
+        console.error("โหลดข้อมูลจาก Google Sheets ไม่สำเร็จ กำลังใช้ข้อมูลสำรองในเครื่อง", e);
+        const saved = localStorage.getItem('leave_requests_db_secure');
+        leaveRequests = saved ? JSON.parse(saved) : [];
+        renderAll();
+    }
+}
 
         async function saveData(newReq = null) {
-    // บันทึกลง Local เครื่องตัวเองสำรองไว้ก่อน
-    localStorage.setItem('leave_requests_db_secure', JSON.stringify(leaveRequests));
-    
-    // ถ้ามีคำขอใหม่ถูกส่งเข้ามา ให้ส่งข้อมูลนี้ขึ้น Google Sheets ทันที
     if (newReq) {
         try {
             const url = `${WEB_APP_URL}?action=save&id=${encodeURIComponent(newReq.id)}&name=${encodeURIComponent(newReq.name)}&dept=${encodeURIComponent(newReq.dept)}&type=${encodeURIComponent(newReq.type)}&startDate=${encodeURIComponent(newReq.startDate)}&endDate=${encodeURIComponent(newReq.endDate)}&reason=${encodeURIComponent(newReq.reason)}&status=${encodeURIComponent(newReq.status)}&timestamp=${encodeURIComponent(newReq.timestamp)}`;
             
             await fetch(url, { method: 'GET' });
+            
+            // โหลดข้อมูลใหม่จากชีตทันทีเพื่อให้ทุกเครื่องเห็นตรงกัน
+            setTimeout(loadData, 1000); 
         } catch (e) {
             console.error("บันทึกข้อมูลไป Google Sheets ล้มเหลว", e);
         }
     }
+    // สำรองไว้ใน localStorage ของเครื่องนั้นๆ ด้วย
+    localStorage.setItem('leave_requests_db_secure', JSON.stringify(leaveRequests));
 }
 
         function resetData() {
@@ -562,13 +565,25 @@ renderAll();
         }
 
         function deleteRequest(id) {
-            if (confirm("คุณต้องการลบรายการนี้ใช่หรือไม่?")) {
-                leaveRequests = leaveRequests.filter(r => r.id !== id);
-                saveData();
-                renderAll();
-                showToast("ลบรายการสำเร็จ", "success");
-            }
-        }
+    if (confirm("คุณต้องการลบรายการนี้ใช่หรือไม่?")) {
+        leaveRequests = leaveRequests.filter(r => r.id !== id);
+        localStorage.setItem('leave_requests_db_secure', JSON.stringify(leaveRequests));
+        
+        // ส่งค่ารีเซ็ตข้อมูลทั้งหมดขึ้น Google Sheets ใหม่เพื่อให้ตรงกัน
+        syncAllToSheet();
+        renderAll();
+        showToast("ลบรายการสำเร็จ", "success");
+    }
+}
+async function syncAllToSheet() {
+    try {
+        // ล้างชีตแล้วบันทึกใหม่ทั้งหมดผ่าน URL (หรือใช้วิธีส่งชุดข้อมูลปัจจุบันไป)
+        const url = `${WEB_APP_URL}?action=syncAll&data=${encodeURIComponent(JSON.stringify(leaveRequests))}`;
+        await fetch(url, { method: 'GET' });
+    } catch(e) {
+        console.error("Sync error", e);
+    }
+}
 
         function openLeaveModal() {
             document.getElementById('leaveModal').classList.remove('hidden');
@@ -651,11 +666,11 @@ window.addEventListener('DOMContentLoaded', () => {
     renderAll();
 
     // ==========================================
-    // เพิ่มตรงนี้: ดึงข้อมูลอัตโนมัติทุกๆ 15 วินาที
+    // เพิ่มตรงนี้: ดึงข้อมูลอัตโนมัติทุกๆ 10 วินาที
     // ==========================================
     setInterval(() => {
         loadData();
-    }, 15000); 
+    }, 10000); 
 });
     </script>
 </body>
