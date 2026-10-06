@@ -321,22 +321,21 @@
             }
         }
 
-        async function saveData() {
-            // สำรองข้อมูลไว้ใน LocalStorage เครื่องปัจจุบันด้วย
-            localStorage.setItem('leave_requests_db_secure', JSON.stringify(leaveRequests));
+        async function saveData(newReq = null) {
+    // บันทึกลง Local เครื่องตัวเองสำรองไว้ก่อน
+    localStorage.setItem('leave_requests_db_secure', JSON.stringify(leaveRequests));
+    
+    // ถ้ามีคำขอใหม่ถูกส่งเข้ามา ให้ส่งข้อมูลนี้ขึ้น Google Sheets ทันที
+    if (newReq) {
+        try {
+            const url = `${WEB_APP_URL}?action=save&id=${encodeURIComponent(newReq.id)}&name=${encodeURIComponent(newReq.name)}&dept=${encodeURIComponent(newReq.dept)}&type=${encodeURIComponent(newReq.type)}&startDate=${encodeURIComponent(newReq.startDate)}&endDate=${encodeURIComponent(newReq.endDate)}&reason=${encodeURIComponent(newReq.reason)}&status=${encodeURIComponent(newReq.status)}&timestamp=${encodeURIComponent(newReq.timestamp)}`;
             
-            // ซิงค์ข้อมูลขึ้น Google Sheets ทันที
-            try {
-                await fetch(WEB_APP_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'sync', requests: leaveRequests })
-                });
-            } catch (e) {
-                console.error("ซิงค์ข้อมูลไป Google Sheets ล้มเหลว", e);
-            }
+            await fetch(url, { method: 'GET' });
+        } catch (e) {
+            console.error("บันทึกข้อมูลไป Google Sheets ล้มเหลว", e);
         }
+    }
+}
 
         function resetData() {
             if (confirm("คุณต้องการล้างข้อมูลคำขอทั้งหมดใช่หรือไม่?")) {
@@ -522,20 +521,20 @@
             }
 
             const newReq = {
-                id: 'req_' + Date.now(),
-                name,
-                dept,
-                type,
-                startDate,
-                endDate,
-                reason,
-                status: 'PENDING',
-                timestamp: Date.now()
-            };
+    id: 'req_' + Date.now(),
+    name,
+    dept,
+    type,
+    startDate,
+    endDate,
+    reason,
+    status: 'PENDING',
+    timestamp: Date.now()
+};
 
-            leaveRequests.push(newReq);
-            saveData();
-            renderAll();
+leaveRequests.push(newReq);
+saveData(newReq); // ส่งข้อมูลชิ้นใหม่ขึ้น Sheet ทันที
+renderAll();
             closeLeaveModal();
             document.getElementById('leaveForm').reset();
             document.getElementById('startDate').value = "2026-12-01";
