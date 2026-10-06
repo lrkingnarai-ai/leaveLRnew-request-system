@@ -301,22 +301,41 @@
             renderAll();
         });
 
-        function loadData() {
-            const saved = localStorage.getItem('leave_requests_db_v3');
-            if (saved) {
-                try {
-                    leaveRequests = JSON.parse(saved);
-                } catch (e) {
-                    leaveRequests = [];
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwDqc_RNlQx_WtUqOb2hzD_uxnHSXePvbQJoO5rstVHRo3cwDA6-eScZK5fDkf9Jffw/exec";
+
+        async function loadData() {
+            try {
+                const response = await fetch(WEB_APP_URL);
+                const data = await response.json();
+                if (Array.isArray(data) && data.length > 0) {
+                    leaveRequests = data;
+                } else {
+                    leaveRequests = defaultMockData;
                 }
-            } else {
-                leaveRequests = defaultMockData;
-                saveData();
+                renderAll();
+            } catch (e) {
+                console.error("โหลดข้อมูลจาก Google Sheets ไม่สำเร็จ กำลังใช้ข้อมูลสำรอง", e);
+                const saved = localStorage.getItem('leave_requests_db_secure');
+                leaveRequests = saved ? JSON.parse(saved) : defaultMockData;
+                renderAll();
             }
         }
 
-        function saveData() {
-            localStorage.setItem('leave_requests_db_v3', JSON.stringify(leaveRequests));
+        async function saveData() {
+            // สำรองข้อมูลไว้ใน LocalStorage เครื่องปัจจุบันด้วย
+            localStorage.setItem('leave_requests_db_secure', JSON.stringify(leaveRequests));
+            
+            // ซิงค์ข้อมูลขึ้น Google Sheets ทันที
+            try {
+                await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'sync', requests: leaveRequests })
+                });
+            } catch (e) {
+                console.error("ซิงค์ข้อมูลไป Google Sheets ล้มเหลว", e);
+            }
         }
 
         function resetData() {
@@ -622,6 +641,23 @@
                 toast.classList.add('translate-y-20', 'opacity-0');
             }, 3000);
         }
+window.addEventListener('DOMContentLoaded', () => {
+    loadData();
+    
+    document.getElementById('startDate').value = "2026-12-01";
+    document.getElementById('endDate').value = "2026-12-01";
+    document.getElementById('cancelStartDate').value = "2026-12-01";
+    document.getElementById('cancelEndDate').value = "2026-12-01";
+    
+    renderAll();
+
+    // ==========================================
+    // เพิ่มตรงนี้: ดึงข้อมูลอัตโนมัติทุกๆ 15 วินาที
+    // ==========================================
+    setInterval(() => {
+        loadData();
+    }, 15000); 
+});
     </script>
 </body>
 </html>
