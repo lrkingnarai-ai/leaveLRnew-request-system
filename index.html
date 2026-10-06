@@ -290,30 +290,54 @@
             return `${year}-${month}-${day}`;
         }
 
-        window.addEventListener('DOMContentLoaded', () => {
-            loadData();
-            
-            document.getElementById('startDate').value = "2026-12-01";
-            document.getElementById('endDate').value = "2026-12-01";
-            document.getElementById('cancelStartDate').value = "2026-12-01";
-            document.getElementById('cancelEndDate').value = "2026-12-01";
-            
+        window.addEventListener('DOMContentLoaded', async () => {
+    // 1. ดึงข้อมูลสำรองจาก LocalStorage มาแสดงผลทันทีเพื่อไม่ให้หน้าจอว่างหรือข้อมูลหาย
+    const saved = localStorage.getItem('leave_requests_db_secure');
+    if (saved) {
+        try {
+            leaveRequests = JSON.parse(saved);
             renderAll();
-        });
+        } catch (e) {
+            leaveRequests = [];
+        }
+    }
 
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwDqc_RNlQx_WtUqOb2hzD_uxnHSXePvbQJoO5rstVHRo3cwDA6-eScZK5fDkf9Jffw/exec";
+    // 2. กำหนดค่าวันที่เริ่มต้นในฟอร์ม
+    document.getElementById('startDate').value = "2026-12-01";
+    document.getElementById('endDate').value = "2026-12-01";
+    document.getElementById('cancelStartDate').value = "2026-12-01";
+    document.getElementById('cancelEndDate').value = "2026-12-01";
+
+    // 3. ทำการดึงข้อมูลล่าสุดจาก Google Sheets ทันที
+    await loadData();
+});
+
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxgi8OWEaeCLfuLtwOYNuP9JsO0RT_1Fh6N6C5joB9Ju5yEYOQFoCjgi3rH3gE46uw/exec";
 
        async function loadData() {
     try {
         const response = await fetch(WEB_APP_URL);
-        const data = await response.json();
+        const textData = await response.text(); // อ่านค่าเป็น Text ดิบก่อนเพื่อเช็คความถูกต้อง
         
-        // ถ้าใน Google Sheets มีข้อมูล ให้ดึงมาแสดงผลทันที
-        if (Array.isArray(data)) {
+        if (!textData || textData.trim() === "") {
+            console.log("ยังไม่มีข้อมูลใน Google Sheets");
+            return;
+        }
+        
+        const data = JSON.parse(textData);
+        
+        if (Array.isArray(data) && data.length > 0) {
             leaveRequests = data;
-            // อัปเดตเก็บไว้ในเครื่องตัวเองเพื่อดูแบบออฟไลน์ได้ชั่วคราว
+            // บันทึกสำรองไว้ในเครื่อง
             localStorage.setItem('leave_requests_db_secure', JSON.stringify(leaveRequests));
             renderAll();
+        } else {
+            // ถ้าข้อมูลในชีตเป็นค่าว่าง ให้ลองดึงจาก LocalStorage สำรองมากู้ภัยก่อน
+            const saved = localStorage.getItem('leave_requests_db_secure');
+            if (saved) {
+                leaveRequests = JSON.parse(saved);
+                renderAll();
+            }
         }
     } catch (e) {
         console.error("โหลดข้อมูลจาก Google Sheets ไม่สำเร็จ กำลังใช้ข้อมูลสำรองในเครื่อง", e);
