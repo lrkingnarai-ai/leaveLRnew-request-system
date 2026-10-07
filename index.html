@@ -10,6 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase App & Firestore SDK (ย้ายมาไว้ที่ <head> ให้ถูกต้อง) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
     <script>
         tailwind.config = {
             theme: {
@@ -106,8 +111,6 @@
 
         <!-- Right Column: Guidelines -->
         <div class="space-y-6">
-            
-            <!-- กล่องแสดงหลักเกณฑ์การเขียนขอหยุด/ลาพักผ่อน -->
             <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                 <div class="flex items-center space-x-2 mb-4">
                     <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -123,14 +126,13 @@
                     <p><strong>5.</strong> ขอหยุดได้ไม่เกิน 2 ครั้ง/เดือน/คน</p>
                 </div>
             </div>
-
         </div>
 
     </main>
 
     <!-- Leave Request Modal -->
     <div id="leaveModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden">
             <div class="bg-indigo-600 px-6 py-4 text-white flex justify-between items-center">
                 <h3 class="font-bold text-base flex items-center gap-2"><i class="fa-solid fa-calendar-plus"></i> ยื่นคำขอลาหยุด</h3>
                 <button onclick="closeLeaveModal()" class="text-indigo-200 hover:text-white transition"><i class="fa-solid fa-xmark text-lg"></i></button>
@@ -182,7 +184,7 @@
 
     <!-- Cancel Leave Modal -->
     <div id="cancelModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div class="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden">
             <div class="bg-rose-600 px-6 py-4 text-white flex justify-between items-center">
                 <h3 class="font-bold text-base flex items-center gap-2"><i class="fa-solid fa-ban"></i> ยกเลิกขอวันลาหยุด</h3>
                 <button onclick="closeCancelModal()" class="text-rose-200 hover:text-white transition"><i class="fa-solid fa-xmark text-lg"></i></button>
@@ -260,8 +262,23 @@
         <span id="toastMessage">ดำเนินการสำเร็จ</span>
     </div>
 
-    <!-- JavaScript Application Logic -->
+    <!-- JavaScript Application Logic with Firebase -->
     <script>
+        // --- 1. ตั้งค่าการเชื่อมต่อ Firebase ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAxmzTVoBrnAN19-viA4ryajGIRUuA4sVU",
+            authDomain: "leave-system-app-fa79b.firebaseapp.com",
+            projectId: "leave-system-app-fa79b",
+            storageBucket: "leave-system-app-fa79b.firebasestorage.app",
+            messagingSenderId: "1041400134862",
+            appId: "1:1041400134862:web:bf2c919a0338faaf48649f",
+            measurementId: "G-TC0PLJH6Q3"
+        };
+
+        // เริ่มต้นใช้งาน Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
         let leaveRequests = [];
         let currentDate = new Date(2026, 11, 1); // เริ่มต้นที่ ธันวาคม 2569
         let selectedDateStr = "2026-12-01";
@@ -277,8 +294,6 @@
             "2027-10-23", "2027-12-05", "2027-12-10", "2027-12-31"
         ];
 
-        const defaultMockData = [];
-
         function isHoliday(dateStr) {
             return publicHolidays.includes(dateStr);
         }
@@ -290,86 +305,37 @@
             return `${year}-${month}-${day}`;
         }
 
-        window.addEventListener('DOMContentLoaded', async () => {
-    // 1. ดึงข้อมูลสำรองจาก LocalStorage มาแสดงผลทันทีเพื่อไม่ให้หน้าจอว่างหรือข้อมูลหาย
-    const saved = localStorage.getItem('leave_requests_db_secure');
-    if (saved) {
-        try {
-            leaveRequests = JSON.parse(saved);
-            renderAll();
-        } catch (e) {
-            leaveRequests = [];
-        }
-    }
+        // --- 2. โหลดข้อมูลแบบ Realtime จาก Firestore ---
+        window.addEventListener('DOMContentLoaded', () => {
+            loadDataRealtime();
+            
+            document.getElementById('startDate').value = "2026-12-01";
+            document.getElementById('endDate').value = "2026-12-01";
+            document.getElementById('cancelStartDate').value = "2026-12-01";
+            document.getElementById('cancelEndDate').value = "2026-12-01";
+        });
 
-    // 2. กำหนดค่าวันที่เริ่มต้นในฟอร์ม
-    document.getElementById('startDate').value = "2026-12-01";
-    document.getElementById('endDate').value = "2026-12-01";
-    document.getElementById('cancelStartDate').value = "2026-12-01";
-    document.getElementById('cancelEndDate').value = "2026-12-01";
-
-    // 3. ทำการดึงข้อมูลล่าสุดจาก Google Sheets ทันที
-    await loadData();
-});
-
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxgi8OWEaeCLfuLtwOYNuP9JsO0RT_1Fh6N6C5joB9Ju5yEYOQFoCjgi3rH3gE46uw/exec";
-
-       async function loadData() {
-    try {
-        const response = await fetch(WEB_APP_URL);
-        const textData = await response.text(); // อ่านค่าเป็น Text ดิบก่อนเพื่อเช็คความถูกต้อง
-        
-        if (!textData || textData.trim() === "") {
-            console.log("ยังไม่มีข้อมูลใน Google Sheets");
-            return;
-        }
-        
-        const data = JSON.parse(textData);
-        
-        if (Array.isArray(data) && data.length > 0) {
-            leaveRequests = data;
-            // บันทึกสำรองไว้ในเครื่อง
-            localStorage.setItem('leave_requests_db_secure', JSON.stringify(leaveRequests));
-            renderAll();
-        } else {
-            // ถ้าข้อมูลในชีตเป็นค่าว่าง ให้ลองดึงจาก LocalStorage สำรองมากู้ภัยก่อน
-            const saved = localStorage.getItem('leave_requests_db_secure');
-            if (saved) {
-                leaveRequests = JSON.parse(saved);
+        function loadDataRealtime() {
+            db.collection("leaveRequests").onSnapshot((snapshot) => {
+                leaveRequests = [];
+                snapshot.forEach((doc) => {
+                    leaveRequests.push({ docId: doc.id, ...doc.data() });
+                });
                 renderAll();
-            }
+            }, (error) => {
+                console.error("Error loading data: ", error);
+                showToast("ไม่สามารถเชื่อมต่อฐานข้อมูลได้", "error");
+            });
         }
-    } catch (e) {
-        console.error("โหลดข้อมูลจาก Google Sheets ไม่สำเร็จ กำลังใช้ข้อมูลสำรองในเครื่อง", e);
-        const saved = localStorage.getItem('leave_requests_db_secure');
-        leaveRequests = saved ? JSON.parse(saved) : [];
-        renderAll();
-    }
-}
-
-        async function saveData(newReq = null) {
-    if (newReq) {
-        try {
-            const url = `${WEB_APP_URL}?action=save&id=${encodeURIComponent(newReq.id)}&name=${encodeURIComponent(newReq.name)}&dept=${encodeURIComponent(newReq.dept)}&type=${encodeURIComponent(newReq.type)}&startDate=${encodeURIComponent(newReq.startDate)}&endDate=${encodeURIComponent(newReq.endDate)}&reason=${encodeURIComponent(newReq.reason)}&status=${encodeURIComponent(newReq.status)}&timestamp=${encodeURIComponent(newReq.timestamp)}`;
-            
-            await fetch(url, { method: 'GET' });
-            
-            // โหลดข้อมูลใหม่จากชีตทันทีเพื่อให้ทุกเครื่องเห็นตรงกัน
-            setTimeout(loadData, 1000); 
-        } catch (e) {
-            console.error("บันทึกข้อมูลไป Google Sheets ล้มเหลว", e);
-        }
-    }
-    // สำรองไว้ใน localStorage ของเครื่องนั้นๆ ด้วย
-    localStorage.setItem('leave_requests_db_secure', JSON.stringify(leaveRequests));
-}
 
         function resetData() {
-            if (confirm("คุณต้องการล้างข้อมูลคำขอทั้งหมดใช่หรือไม่?")) {
-                leaveRequests = defaultMockData;
-                saveData();
-                renderAll();
-                showToast("รีเซ็ตข้อมูลเรียบร้อยแล้ว", "success");
+            if (confirm("คุณต้องการล้างข้อมูลคำขอทั้งหมดในระบบใช่หรือไม่?")) {
+                db.collection("leaveRequests").get().then((querySnapshot) => {
+                    querySnapshot.forEach((doc) => {
+                        doc.ref.delete();
+                    });
+                    showToast("ล้างข้อมูลทั้งหมดเรียบร้อยแล้ว", "success");
+                });
             }
         }
 
@@ -516,11 +482,10 @@
             `).join('');
         }
 
-        function renderQueue() {
-            // ฟังก์ชันรองรับกรณีเรียกใช้งาน แต่ถอนองค์ประกอบ UI ออกแล้ว
-        }
+        function renderQueue() {}
 
-        function handleLeaveSubmit(e) {
+        // --- 3. บันทึกคำขอลาเข้า Firebase ---
+        async function handleLeaveSubmit(e) {
             e.preventDefault();
             const name = document.getElementById('employeeName').value.trim();
             const dept = document.getElementById('employeeDept').value;
@@ -548,82 +513,69 @@
             }
 
             const newReq = {
-    id: 'req_' + Date.now(),
-    name,
-    dept,
-    type,
-    startDate,
-    endDate,
-    reason,
-    status: 'PENDING',
-    timestamp: Date.now()
-};
+                id: 'req_' + Date.now(),
+                name,
+                dept,
+                type,
+                startDate,
+                endDate,
+                reason,
+                status: 'PENDING',
+                timestamp: Date.now()
+            };
 
-leaveRequests.push(newReq);
-saveData(newReq); // ส่งข้อมูลชิ้นใหม่ขึ้น Sheet ทันที
-renderAll();
-            closeLeaveModal();
-            document.getElementById('leaveForm').reset();
-            document.getElementById('startDate').value = "2026-12-01";
-            document.getElementById('endDate').value = "2026-12-01";
-            showToast("ยื่นคำขอลาหยุดสำเร็จ", "success");
+            try {
+                await db.collection("leaveRequests").add(newReq);
+                closeLeaveModal();
+                document.getElementById('leaveForm').reset();
+                document.getElementById('startDate').value = "2026-12-01";
+                document.getElementById('endDate').value = "2026-12-01";
+                showToast("ยื่นคำขอลาหยุดสำเร็จ", "success");
+            } catch (error) {
+                console.error("Error adding document: ", error);
+                showToast("เกิดข้อผิดพลาดในการบันทึก", "error");
+            }
         }
 
-        function handleCancelSubmit(e) {
+        // --- 4. ยกเลิกวันลาออกจาก Firebase ---
+        async function handleCancelSubmit(e) {
             e.preventDefault();
             const name = document.getElementById('cancelName').value.trim();
             const startDate = document.getElementById('cancelStartDate').value;
             const endDate = document.getElementById('cancelEndDate').value;
 
-            const index = leaveRequests.findIndex(r => r.name === name && r.startDate === startDate && r.endDate === endDate);
-            if (index !== -1) {
-                leaveRequests.splice(index, 1);
-                saveData();
-                renderAll();
+            try {
+                const querySnapshot = await db.collection("leaveRequests")
+                    .where("name", "==", name)
+                    .where("startDate", "==", startDate)
+                    .where("endDate", "==", endDate)
+                    .get();
+
+                if (querySnapshot.empty) {
+                    showToast("ไม่พบรายการคำขอที่ตรงกับข้อมูลดังกล่าว", "error");
+                    return;
+                }
+
+                let deletePromises = [];
+                querySnapshot.forEach((doc) => {
+                    deletePromises.push(db.collection("leaveRequests").doc(doc.id).delete());
+                });
+
+                await Promise.all(deletePromises);
+
                 closeCancelModal();
                 document.getElementById('cancelForm').reset();
                 showToast("ยกเลิกคำขอลาหยุดเรียบร้อยแล้ว", "success");
-            } else {
-                showToast("ไม่พบรายการคำขอที่ตรงกับข้อมูลดังกล่าว", "error");
+            } catch (error) {
+                console.error("Error cancelling request: ", error);
+                showToast("เกิดข้อผิดพลาดในการยกเลิก", "error");
             }
         }
 
-        function deleteRequest(id) {
-    if (confirm("คุณต้องการลบรายการนี้ใช่หรือไม่?")) {
-        leaveRequests = leaveRequests.filter(r => r.id !== id);
-        localStorage.setItem('leave_requests_db_secure', JSON.stringify(leaveRequests));
-        
-        // ส่งค่ารีเซ็ตข้อมูลทั้งหมดขึ้น Google Sheets ใหม่เพื่อให้ตรงกัน
-        syncAllToSheet();
-        renderAll();
-        showToast("ลบรายการสำเร็จ", "success");
-    }
-}
-async function syncAllToSheet() {
-    try {
-        // ล้างชีตแล้วบันทึกใหม่ทั้งหมดผ่าน URL (หรือใช้วิธีส่งชุดข้อมูลปัจจุบันไป)
-        const url = `${WEB_APP_URL}?action=syncAll&data=${encodeURIComponent(JSON.stringify(leaveRequests))}`;
-        await fetch(url, { method: 'GET' });
-    } catch(e) {
-        console.error("Sync error", e);
-    }
-}
-
-        function openLeaveModal() {
-            document.getElementById('leaveModal').classList.remove('hidden');
-        }
-
-        function closeLeaveModal() {
-            document.getElementById('leaveModal').classList.add('hidden');
-        }
-
-        function openCancelModal() {
-            document.getElementById('cancelModal').classList.remove('hidden');
-        }
-
-        function closeCancelModal() {
-            document.getElementById('cancelModal').classList.add('hidden');
-        }
+        function openLeaveModal() { document.getElementById('leaveModal').classList.remove('hidden'); }
+        function closeLeaveModal() { document.getElementById('leaveModal').classList.add('hidden'); }
+        function openCancelModal() { document.getElementById('cancelModal').classList.remove('hidden'); }
+        function closeCancelModal() { document.getElementById('cancelModal').classList.add('hidden'); }
 
         function openReportModal() {
             const year = currentDate.getFullYear();
@@ -646,11 +598,11 @@ async function syncAllToSheet() {
                         <td class="p-2.5">${r.type}</td>
                         <td class="p-2.5">${r.startDate} ถึง ${r.endDate}</td>
                         <td class="p-2.5">
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${r.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' : r.status === 'REJECTED' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}">
-                                ${r.status === 'APPROVED' ? 'อนุมัติแล้ว' : r.status === 'REJECTED' ? 'ไม่อนุมัติ' : 'รออนุมัติ'}
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${r.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
+                                ${r.status === 'APPROVED' ? 'อนุมัติแล้ว' : 'รออนุมัติ'}
                             </span>
                         </td>
-                        <td class="p-2.5">${r.reason || '-'}</td>
+                        <td class="p-2.5 text-slate-500">${r.reason || '-'}</td>
                     </tr>
                 `).join('');
             }
@@ -658,20 +610,18 @@ async function syncAllToSheet() {
             document.getElementById('reportModal').classList.remove('hidden');
         }
 
-        function closeReportModal() {
-            document.getElementById('reportModal').classList.add('hidden');
-        }
+        function closeReportModal() { document.getElementById('reportModal').classList.add('hidden'); }
 
-        function showToast(message, type = 'success') {
+        function showToast(message, type = "success") {
             const toast = document.getElementById('toast');
             const toastMessage = document.getElementById('toastMessage');
             const toastIcon = document.getElementById('toastIcon');
 
             toastMessage.innerText = message;
-            if (type === 'success') {
-                toastIcon.className = 'fa-solid fa-check-circle text-emerald-400';
+            if (type === "success") {
+                toastIcon.className = "fa-solid fa-check-circle text-emerald-400";
             } else {
-                toastIcon.className = 'fa-solid fa-triangle-exclamation text-rose-400';
+                toastIcon.className = "fa-solid fa-exclamation-circle text-rose-400";
             }
 
             toast.classList.remove('translate-y-20', 'opacity-0');
@@ -679,23 +629,6 @@ async function syncAllToSheet() {
                 toast.classList.add('translate-y-20', 'opacity-0');
             }, 3000);
         }
-window.addEventListener('DOMContentLoaded', () => {
-    loadData();
-    
-    document.getElementById('startDate').value = "2026-12-01";
-    document.getElementById('endDate').value = "2026-12-01";
-    document.getElementById('cancelStartDate').value = "2026-12-01";
-    document.getElementById('cancelEndDate').value = "2026-12-01";
-    
-    renderAll();
-
-    // ==========================================
-    // เพิ่มตรงนี้: ดึงข้อมูลอัตโนมัติทุกๆ 10 วินาที
-    // ==========================================
-    setInterval(() => {
-        loadData();
-    }, 10000); 
-});
     </script>
 </body>
 </html>
