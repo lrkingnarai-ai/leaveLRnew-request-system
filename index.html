@@ -11,7 +11,7 @@
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Firebase App & Firestore SDK (ย้ายมาไว้ที่ <head> ให้ถูกต้อง) -->
+    <!-- Firebase App & Firestore SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
@@ -215,7 +215,7 @@
 
     <!-- Monthly Report Modal -->
     <div id="reportModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-xl max-w-4xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+        <div class="bg-white rounded-2xl shadow-xl max-w-5xl w-full overflow-hidden flex flex-col max-h-[90vh]">
             <div class="bg-indigo-600 px-6 py-4 text-white flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-base flex items-center gap-2"><i class="fa-solid fa-file-lines"></i> รายงานสรุปคำขอหยุดประจำเดือน</h3>
                 <button onclick="closeReportModal()" class="text-indigo-200 hover:text-white transition"><i class="fa-solid fa-xmark text-lg"></i></button>
@@ -240,7 +240,8 @@
                                 <th class="p-2.5">ประเภท</th>
                                 <th class="p-2.5">ช่วงวันที่ลา</th>
                                 <th class="p-2.5">สถานะ</th>
-                                <th class="p-2.5 rounded-r-lg">เหตุผล</th>
+                                <th class="p-2.5">เหตุผล</th>
+                                <th class="p-2.5 rounded-r-lg">วันเวลาที่ยกเลิก</th>
                             </tr>
                         </thead>
                         <tbody id="reportTableBody" class="divide-y divide-slate-100"></tbody>
@@ -521,7 +522,8 @@
                 endDate,
                 reason,
                 status: 'PENDING',
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                cancelTimestamp: null
             };
 
             try {
@@ -537,7 +539,7 @@
             }
         }
 
-        // --- 4. ยกเลิกวันลาออกจาก Firebase ---
+        // --- 4. เปลี่ยนสถานะเป็นยกเลิก (REJECTED) และบันทึกเวลา แทนการลบทิ้ง ---
         async function handleCancelSubmit(e) {
             e.preventDefault();
             const name = document.getElementById('cancelName').value.trim();
@@ -545,23 +547,42 @@
             const endDate = document.getElementById('cancelEndDate').value;
 
             try {
+                // ค้นหาเฉพาะชื่อและวันที่ (ใช้เงื่อนไข == ทั้งหมด เพื่อหลีกเลี่ยงปัญหาเรื่อง Index)
                 const querySnapshot = await db.collection("leaveRequests")
                     .where("name", "==", name)
                     .where("startDate", "==", startDate)
                     .where("endDate", "==", endDate)
                     .get();
 
-                if (querySnapshot.empty) {
-                    showToast("ไม่พบรายการคำขอที่ตรงกับข้อมูลดังกล่าว", "error");
+                // กรองหาเฉพาะรายการที่ยังไม่ถูกยกเลิกในฝั่ง JavaScript
+                let targetDocs = [];
+                querySnapshot.forEach((doc) => {
+                    if (doc.data().status !== 'REJECTED') {
+                        targetDocs.push(doc);
+                    }
+                });
+
+                if (targetDocs.length === 0) {
+                    showToast("ไม่พบรายการคำขอที่สามารถยกเลิกได้ หรือรายการถูกยกเลิกไปแล้ว", "error");
                     return;
                 }
 
-                let deletePromises = [];
-                querySnapshot.forEach((doc) => {
-                    deletePromises.push(db.collection("leaveRequests").doc(doc.id).delete());
+                const cancelTimeStr = new Date().toLocaleString('th-TH', { 
+                    year: 'numeric', month: '2-digit', day: '2-digit', 
+                    hour: '2-digit', minute: '2-digit', second: '2-digit' 
                 });
 
-                await Promise.all(deletePromises);
+                let updatePromises = [];
+                targetDocs.forEach((doc) => {
+                    updatePromises.push(
+                        db.collection("leaveRequests").doc(doc.id).update({
+                            status: 'REJECTED',
+                            cancelTimestamp: cancelTimeStr
+                        })
+                    );
+                });
+
+                await Promise.all(updatePromises);
 
                 closeCancelModal();
                 document.getElementById('cancelForm').reset();
@@ -588,23 +609,31 @@
 
             const tbody = document.getElementById('reportTableBody');
             if (monthRequests.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-6 text-slate-400">ไม่มีข้อมูลคำขอในเดือนนี้</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-6 text-slate-400">ไม่มีข้อมูลคำขอในเดือนนี้</td></tr>`;
             } else {
-                tbody.innerHTML = monthRequests.map((r, i) => `
-                    <tr class="hover:bg-slate-50">
-                        <td class="p-2.5">${i + 1}</td>
-                        <td class="p-2.5 font-medium">${r.name}</td>
-                        <td class="p-2.5">${r.dept}</td>
-                        <td class="p-2.5">${r.type}</td>
-                        <td class="p-2.5">${r.startDate} ถึง ${r.endDate}</td>
-                        <td class="p-2.5">
-                            <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${r.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
-                                ${r.status === 'APPROVED' ? 'อนุมัติแล้ว' : 'รออนุมัติ'}
-                            </span>
-                        </td>
-                        <td class="p-2.5 text-slate-500">${r.reason || '-'}</td>
-                    </tr>
-                `).join('');
+                tbody.innerHTML = monthRequests.map((r, i) => {
+                    let statusBadge = '';
+                    if (r.status === 'APPROVED') {
+                        statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700">อนุมัติแล้ว</span>';
+                    } else if (r.status === 'REJECTED') {
+                        statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 text-rose-700">ยกเลิกแล้ว</span>';
+                    } else {
+                        statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">รออนุมัติ</span>';
+                    }
+
+                    return `
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-2.5">${i + 1}</td>
+                            <td class="p-2.5 font-medium">${r.name}</td>
+                            <td class="p-2.5">${r.dept}</td>
+                            <td class="p-2.5">${r.type}</td>
+                            <td class="p-2.5">${r.startDate} ถึง ${r.endDate}</td>
+                            <td class="p-2.5">${statusBadge}</td>
+                            <td class="p-2.5 text-slate-500">${r.reason || '-'}</td>
+                            <td class="p-2.5 text-rose-600 font-medium">${r.cancelTimestamp || '-'}</td>
+                        </tr>
+                    `;
+                }).join('');
             }
 
             document.getElementById('reportModal').classList.remove('hidden');
