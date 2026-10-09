@@ -60,9 +60,6 @@
                 <button onclick="openLeaveModal()" class="bg-white text-indigo-600 hover:bg-indigo-50 font-semibold px-4 py-2 rounded-xl shadow transition flex items-center gap-2 text-sm">
                     <i class="fa-solid fa-plus-circle"></i> ยื่นคำขอลาหยุด
                 </button>
-                <button onclick="resetData()" class="bg-indigo-700 hover:bg-indigo-800 text-indigo-100 px-3 py-2 rounded-xl text-xs transition" title="คืนค่าข้อมูลตัวอย่าง">
-                    <i class="fa-solid fa-rotate-right"></i> รีเซ็ต
-                </button>
             </div>
         </div>
     </header>
@@ -358,7 +355,11 @@
             const year = currentDate.getFullYear();
             const month = currentDate.getMonth();
 
+            // อัปเดตข้อความหัวข้อปฏิทิน
             document.getElementById('calendarMonthYear').innerText = `${TH_MONTHS[month]} ${year + 543}`;
+            
+            // อัปเดตข้อความบนปุ่มลัดให้เปลี่ยนตามเดือนที่แสดงอยู่
+            document.querySelector('button[onclick="goToCurrentMonth()"]').innerText = `${TH_MONTHS[month]} ${year + 543}`;
 
             const firstDayIndex = new Date(year, month, 1).getDay();
             const totalDays = new Date(year, month + 1, 0).getDate();
