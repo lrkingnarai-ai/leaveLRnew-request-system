@@ -236,6 +236,7 @@
                                 <th class="p-2.5">ตำแหน่ง</th>
                                 <th class="p-2.5">ประเภท</th>
                                 <th class="p-2.5">ช่วงวันที่ลา</th>
+                                <th class="p-2.5">วันเวลาที่ยื่นขอ</th>
                                 <th class="p-2.5">สถานะ</th>
                                 <th class="p-2.5">เหตุผล</th>
                                 <th class="p-2.5 rounded-r-lg">วันเวลาที่ยกเลิก</th>
@@ -603,14 +604,18 @@
             const year = currentDate.getFullYear();
             const month = currentDate.getMonth();
             document.getElementById('reportTitle').innerText = `รายงานสรุปคำขอลาหยุดประจำเดือน ${TH_MONTHS[month]} ${year + 543}`;
-            document.getElementById('printDate').innerText = new Date().toLocaleDateString('th-TH');
+            
+            const today = new Date();
+            const thaiPrintDate = `${today.getDate()} ${TH_MONTHS[today.getMonth()]} ${today.getFullYear() + 543}`;
+            document.getElementById('printDate').innerText = thaiPrintDate;
 
             const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
-            const monthRequests = leaveRequests.filter(r => r.startDate.startsWith(monthStr) || r.endDate.startsWith(monthStr));
+            const monthRequests = leaveRequests.filter(r => r.startDate.startsWith(monthStr) || r.endDate.startsWith(monthStr))
+                .sort((a, b) => a.startDate.localeCompare(b.startDate));
 
             const tbody = document.getElementById('reportTableBody');
             if (monthRequests.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-6 text-slate-400">ไม่มีข้อมูลคำขอในเดือนนี้</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="text-center py-6 text-slate-400">ไม่มีข้อมูลคำขอในเดือนนี้</td></tr>`;
             } else {
                 tbody.innerHTML = monthRequests.map((r, i) => {
                     let statusBadge = '';
@@ -622,13 +627,27 @@
                         statusBadge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">รออนุมัติ</span>';
                     }
 
+                    // แปลง timestamp ของการยื่นขอให้เป็นรูปแบบวันที่และเวลาไทย
+                    let requestDateTimeStr = '-';
+                    if (r.timestamp) {
+                        const reqDate = new Date(r.timestamp);
+                        requestDateTimeStr = `${reqDate.getDate()} ${TH_MONTHS[reqDate.getMonth()]} ${reqDate.getFullYear() + 543} เวลา ${String(reqDate.getHours()).padStart(2, '0')}:${String(reqDate.getMinutes()).padStart(2, '0')} น.`;
+                    }
+
+                    // แปลงช่วงวันที่ลาเป็นแบบไทย (เช่น 1 ธันวาคม 2569 ถึง 2 ธันวาคม 2569)
+                    let leaveDateRangeStr = `${formatThaiDate(r.startDate)} ถึง ${formatThaiDate(r.endDate)}`;
+                    if (r.startDate === r.endDate) {
+                        leaveDateRangeStr = formatThaiDate(r.startDate); // ถ้าวันเดียวกัน แสดงครั้งเดียว
+                    }
+
                     return `
                         <tr class="hover:bg-slate-50">
                             <td class="p-2.5">${i + 1}</td>
                             <td class="p-2.5 font-medium">${r.name}</td>
                             <td class="p-2.5">${r.dept}</td>
                             <td class="p-2.5">${r.type}</td>
-                            <td class="p-2.5">${r.startDate} ถึง ${r.endDate}</td>
+                            <td class="p-2.5">${leaveDateRangeStr}</td>
+                            <td class="p-2.5 text-indigo-600 font-medium">${requestDateTimeStr}</td>
                             <td class="p-2.5">${statusBadge}</td>
                             <td class="p-2.5 text-slate-500">${r.reason || '-'}</td>
                             <td class="p-2.5 text-rose-600 font-medium">${r.cancelTimestamp || '-'}</td>
@@ -637,9 +656,19 @@
                 }).join('');
             }
 
+            document.getElementById('reportModal').classList.add('hidden');
             document.getElementById('reportModal').classList.remove('hidden');
         }
-
+// ฟังก์ชันช่วยแปลงรูปแบบ 'YYYY-MM-DD' เป็น วัน เดือน ปี ไทย
+        function formatThaiDate(dateStr) {
+            if (!dateStr) return '-';
+            const parts = dateStr.split('-');
+            if (parts.length !== 3) return dateStr;
+            const year = parseInt(parts[0]) + 543;
+            const month = TH_MONTHS[parseInt(parts[1]) - 1];
+            const day = parseInt(parts[2]);
+            return `${day} ${month} ${year}`;
+        }
         function closeReportModal() { document.getElementById('reportModal').classList.add('hidden'); }
 
         function showToast(message, type = "success") {
