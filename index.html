@@ -611,7 +611,7 @@
 
             const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
             const monthRequests = leaveRequests.filter(r => r.startDate.startsWith(monthStr) || r.endDate.startsWith(monthStr))
-                .sort((a, b) => a.startDate.localeCompare(b.startDate));
+                .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
 
             const tbody = document.getElementById('reportTableBody');
             if (monthRequests.length === 0) {
