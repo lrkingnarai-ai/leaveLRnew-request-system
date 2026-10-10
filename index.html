@@ -34,6 +34,38 @@
             #printArea, #printArea * { visibility: visible; }
             #printArea { position: absolute; left: 0; top: 0; width: 100%; }
         }
+@media print {
+    /* ซ่อนองค์ประกอบที่ไม่ต้องการให้พิมพ์ เช่น ปุ่มปิด ปุ่มพิมพ์ */
+    button, .no-print, header, nav {
+        display: none !important;
+    }
+
+    /* ให้หน้าต่างรายงานแสดงผลเต็มหน้ากระดาษตอนปริ้น */
+    body {
+        background-color: white !important;
+        color: black !important;
+    }
+
+    #reportModal {
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        background: white !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* ป้องกันหัวตาราง (thead) ซ้ำซ้อนเวลากระดาษขึ้นหน้าใหม่ */
+    thead {
+        display: table-header-group;
+    }
+    tr {
+        page-break-inside: avoid;
+    }
+}
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 h-full flex flex-col">
