@@ -498,7 +498,7 @@
             renderCalendar();
         }
 
-        function renderDailySummary() {
+        unction renderDailySummary() {
             const titleEl = document.getElementById('selectedDateTitle');
             const badgeEl = document.getElementById('dailyCountBadge');
             const listEl = document.getElementById('dailyLeaveList');
@@ -509,7 +509,11 @@
             let holidayText = isHoliday(selectedDateStr) ? ` <span class="text-rose-600 text-xs font-semibold">(วันหยุดนักขัตฤกษ์ - ไม่อนุญาตให้ขอหยุด)</span>` : '';
             titleEl.innerHTML = `สรุปวันที่ ${thaiDateStr}${holidayText}`;
 
-            const activeLeaves = leaveRequests.filter(req => req.status !== 'REJECTED' && selectedDateStr >= req.startDate && selectedDateStr <= req.endDate);
+            // กรองเฉพาะรายการที่ยังไม่ถูกยกเลิก และเรียงตามเวลาที่ยื่นขอก่อน-หลัง (timestamp น้อยไปมาก)
+            const activeLeaves = leaveRequests
+                .filter(req => req.status !== 'REJECTED' && selectedDateStr >= req.startDate && selectedDateStr <= req.endDate)
+                .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
             badgeEl.innerText = `${activeLeaves.length} คนหยุดวันนี้`;
 
             if (activeLeaves.length === 0) {
@@ -522,22 +526,75 @@
                 return;
             }
 
-            listEl.innerHTML = activeLeaves.map(req => `
-                <div class="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs">
-                    <div class="flex items-center gap-3">
-                        <div class="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-sm">
-                            ${req.name.charAt(0)}
+            // กำหนดกลุ่มตำแหน่งที่ต้องการแสดง
+            const departments = [
+                { name: 'พยาบาล', icon: 'fa-user-nurse', color: 'indigo' },
+                { name: 'ผู้ช่วยเหลือคนไข้', icon: 'fa-hand-holding-medical', color: 'teal' },
+                { name: 'แม่บ้าน', icon: 'fa-broom', color: 'amber' }
+            ];
+
+            let htmlContent = '';
+
+            // วนลูปสร้างรายการแยกตามแต่ละตำแหน่ง
+            departments.forEach(deptInfo => {
+                const deptLeaves = activeLeaves.filter(req => req.dept === deptInfo.name);
+                
+                if (deptLeaves.length > 0) {
+                    htmlContent += `
+                        <div class="mb-4 last:mb-0">
+                            <div class="flex items-center justify-between mb-2 px-1">
+                                <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                    <i class="fa-solid ${deptInfo.icon} text-${deptInfo.color}-600"></i> ${deptInfo.name}
+                                </span>
+                                <span class="text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">
+                                    ขอหยุด ${deptLeaves.length} คน
+                                </span>
+                            </div>
+                            <div class="space-y-2">
+                                ${deptLeaves.map((req, index) => {
+                                    const queueNum = index + 1;
+                                    // ไฮไลต์สีคิว: ลำดับ 1-2 ได้สิทธิ์ก่อน (สีเขียว/น้ำเงิน), เกิน 2 คนแจ้งเตือน (สีส้มแดง)
+                                    const queueBadgeClass = queueNum <= 2 
+                                        ? 'bg-indigo-600 text-white' 
+                                        : 'bg-rose-100 text-rose-700 border border-rose-200';
+                                    
+                                    // แปลงเวลาที่กดยื่นขอ
+                                    let timeStr = '';
+                                    if (req.timestamp) {
+                                        const reqDate = new Date(req.timestamp);
+                                        timeStr = `ยื่นขอ: ${reqDate.getDate()}/${reqDate.getMonth()+1}/${reqDate.getFullYear()+543} ${String(reqDate.getHours()).padStart(2, '0')}:${String(reqDate.getMinutes()).padStart(2, '0')} น.`;
+                                    }
+
+                                    return `
+                                        <div class="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs">
+                                            <div class="flex items-center gap-3">
+                                                <div class="w-8 h-8 rounded-xl ${queueBadgeClass} font-bold flex flex-col items-center justify-center shrink-0 leading-tight">
+                                                    <span class="text-[9px] font-normal opacity-90">คิว</span>
+                                                    <span class="text-xs">${queueNum}</span>
+                                                </div>
+                                                <div>
+                                                    <p class="font-semibold text-slate-700 text-sm">${req.name}</p>
+                                                    <p class="text-slate-500 text-[11px]">
+                                                        <span class="text-indigo-600 font-medium">${req.type}</span> (${formatThaiDate(req.startDate)} - ${formatThaiDate(req.endDate)})
+                                                    </p>
+                                                    <p class="text-slate-400 text-[10px] mt-0.5"><i class="fa-regular fa-clock"></i> ${timeStr}</p>
+                                                </div>
+                                            </div>
+                                            <span class="px-2 py-1 rounded-full text-[10px] font-semibold shrink-0 ${req.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
+                                                ${req.status === 'APPROVED' ? 'อนุมัติแล้ว' : 'รออนุมัติ'}
+                                            </span>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
                         </div>
-                        <div>
-                            <p class="font-semibold text-slate-700 text-sm">${req.name}</p>
-                            <p class="text-slate-400 text-[11px]">${req.dept} <span class="text-indigo-600 font-medium">${req.type}</span> (${req.startDate} ถึง ${req.endDate})</p>
-                        </div>
-                    </div>
-                    <span class="px-2 py-1 rounded-full text-[10px] font-semibold ${req.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
-                        ${req.status === 'APPROVED' ? 'อนุมัติแล้ว' : 'รออนุมัติ'}
-                    </span>
-                </div>
-            `).join('');
+                    `;
+                }
+            });
+
+            // ปรับความสูงกล่องให้เลื่อนดูได้สะดวกขึ้นเมื่อแยกหมวดหมู่
+            listEl.className = "space-y-3 max-h-96 overflow-y-auto pr-1";
+            listEl.innerHTML = htmlContent;
         }
 
         function renderQueue() {}
